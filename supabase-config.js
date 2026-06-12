@@ -4,9 +4,9 @@
 // URLが見つからない場合は projectRef だけ入れればOKです。
 // url は projectRef から自動生成します。
 
-const projectRef = "YOUR_PROJECT_REF";
+const projectRef = "zyudljqybwobrkkaftnn";
 
 window.TCJ_SUPABASE_CONFIG = {
   url: `https://${projectRef}.supabase.co`,
-  anonKey: "YOUR_SUPABASE_PUBLISHABLE_KEY",
+  anonKey: "sb_publishable_ZOXOtLZHDGkc5c_C0sBcNg_bwlJ8hcv",
 };
