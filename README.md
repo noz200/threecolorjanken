@@ -37,16 +37,33 @@ supabase/schema.sql
 
 ### 2. Supabase設定を入れる
 
-`supabase-config.js` を自分のSupabase情報に変更します。
+`supabase-config.js` を自分のSupabase情報に変更します。  
+URLがDashboardに見つからない場合は、Dashboard URLの `project/` の後ろにあるProject refだけ入れればOKです。
+
+Dashboard URLがこれなら、
+
+```text
+https://supabase.com/dashboard/project/abcdefghijklmnopqrst
+```
+
+`projectRef` はこれです。
+
+```text
+abcdefghijklmnopqrst
+```
+
+設定例:
 
 ```js
+const projectRef = "abcdefghijklmnopqrst";
+
 window.TCJ_SUPABASE_CONFIG = {
-  url: "https://xxxxx.supabase.co",
-  anonKey: "your-anon-key",
+  url: `https://${projectRef}.supabase.co`,
+  anonKey: "sb_publishable_xxxxxxxxxxxxxxxxx",
 };
 ```
 
-SupabaseのProject URLとanon keyは、Supabase DashboardのProject Settings → APIから確認できます。
+`anonKey` にはSupabaseの `Publishable key` を入れてください。`Secret key` は絶対に入れないでください。
 
 ### 3. GitHub Pagesを有効化
 
@@ -75,6 +92,6 @@ https://noz200.github.io/threecolorjanken/
 ## 注意
 
 この実装は、友達同士で遊ぶための軽量版です。  
-GitHub PagesからSupabaseのanon keyを使って直接DBを読む構成なので、ブラウザの開発者ツールを開けばゲーム状態は見えます。つまり本気の不正対策はありません。まあブラウザだけで公平なオンラインカードゲームを作ろうとすると、だいたいここで人類の欲望に負けます。
+GitHub PagesからSupabaseのPublishable keyを使って直接DBを読む構成なので、ブラウザの開発者ツールを開けばゲーム状態は見えます。つまり本気の不正対策はありません。まあブラウザだけで公平なオンラインカードゲームを作ろうとすると、だいたいここで人類の欲望に負けます。
 
 本気で不正対策するなら、カード選択・手札・勝敗判定をサーバー側、またはSupabase Edge Functions側に寄せてください。
