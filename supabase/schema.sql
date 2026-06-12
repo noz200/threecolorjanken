@@ -1,9 +1,11 @@
 -- 三色じゃんけん GitHub Pages + Supabase 版
 -- Supabase SQL Editorでこのファイルをそのまま実行してください。
+-- 既に旧版を実行済みでも、もう一度このSQLを実行すれば2人/3人対応カラムと関数が更新されます。
 
 create table if not exists public.tcj_waiting (
   player_id text primary key,
   name text not null,
+  desired_player_count integer not null default 3,
   joined_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   visible boolean not null default true
@@ -11,6 +13,7 @@ create table if not exists public.tcj_waiting (
 
 create table if not exists public.tcj_games (
   id uuid primary key default gen_random_uuid(),
+  player_count integer not null default 3,
   status text not null default 'playing',
   phase text not null default 'playing',
   round integer not null default 1,
@@ -32,6 +35,32 @@ create table if not exists public.tcj_presence (
   visible boolean not null default true,
   updated_at timestamptz not null default now()
 );
+
+alter table public.tcj_waiting
+  add column if not exists desired_player_count integer not null default 3;
+
+alter table public.tcj_games
+  add column if not exists player_count integer not null default 3;
+
+do $$
+begin
+  alter table public.tcj_waiting
+    add constraint tcj_waiting_desired_player_count_check
+    check (desired_player_count in (2, 3));
+exception
+  when duplicate_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter table public.tcj_games
+    add constraint tcj_games_player_count_check
+    check (player_count in (2, 3));
+exception
+  when duplicate_object then null;
+end;
+$$;
 
 create or replace function public.tcj_create_deck()
 returns jsonb
@@ -60,7 +89,7 @@ as $$
   ) as hands(hand, hand_order);
 $$;
 
-create or replace function public.tcj_try_match(p_player_id text)
+create or replace function public.tcj_try_match(p_player_id text, p_player_count integer default 3)
 returns uuid
 language plpgsql
 security definer
@@ -70,20 +99,35 @@ declare
   selected_players jsonb;
   selected_count integer;
   created_game_id uuid;
+  match_count integer;
 begin
+  match_count := least(3, greatest(2, coalesce(p_player_count, 3)));
+
   lock table public.tcj_waiting in exclusive mode;
 
   delete from public.tcj_waiting
   where updated_at < now() - interval '30 seconds'
      or (visible = false and updated_at < now() - interval '18 seconds');
 
+  if not exists (
+    select 1
+    from public.tcj_waiting
+    where player_id = p_player_id
+      and desired_player_count = match_count
+      and visible = true
+      and updated_at >= now() - interval '30 seconds'
+  ) then
+    return null;
+  end if;
+
   with candidates as (
     select player_id, name, joined_at
     from public.tcj_waiting
     where visible = true
       and updated_at >= now() - interval '30 seconds'
+      and desired_player_count = match_count
     order by joined_at asc
-    limit 3
+    limit match_count
     for update
   )
   select
@@ -103,11 +147,12 @@ begin
   into selected_count, selected_players
   from candidates;
 
-  if selected_count < 3 then
+  if selected_count < match_count then
     return null;
   end if;
 
   insert into public.tcj_games (
+    player_count,
     status,
     phase,
     round,
@@ -117,6 +162,7 @@ begin
     submissions
   )
   values (
+    match_count,
     'playing',
     'playing',
     1,
@@ -172,7 +218,7 @@ grant select, insert, update, delete on public.tcj_waiting to anon;
 grant select, insert, update, delete on public.tcj_games to anon;
 grant select, insert, update, delete on public.tcj_presence to anon;
 grant execute on function public.tcj_create_deck() to anon;
-grant execute on function public.tcj_try_match(text) to anon;
+grant execute on function public.tcj_try_match(text, integer) to anon;
 
 do $$
 begin
