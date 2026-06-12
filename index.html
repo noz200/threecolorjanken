@@ -15,8 +15,8 @@
         <p class="subtitle">3人そろったら自動で対戦開始</p>
 
         <div class="setup-warning hidden" id="setupWarning">
-          Firebase設定がまだ入っていません。<br />
-          <code>firebase-config.js</code> を自分のFirebase設定に変更してください。
+          Supabase設定がまだ入っていません。<br />
+          <code>supabase-config.js</code> を自分のProject URLとanon keyに変更してください。
         </div>
 
         <label class="name-label" for="nameInput">なまえ</label>
@@ -86,7 +86,8 @@
     <div id="toast" class="toast hidden"></div>
   </main>
 
-  <script src="firebase-config.js"></script>
-  <script type="module" src="app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
