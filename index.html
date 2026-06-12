@@ -12,7 +12,7 @@
       <div class="logo-card">
         <p class="mini-label">online board game</p>
         <h1>三色じゃんけん</h1>
-        <p class="subtitle">3人そろったら自動で対戦開始</p>
+        <p class="subtitle">2人でも3人でも対戦開始</p>
 
         <div class="setup-warning hidden" id="setupWarning">
           Supabase設定がまだ入っていません。<br />
@@ -21,6 +21,12 @@
 
         <label class="name-label" for="nameInput">なまえ</label>
         <input id="nameInput" class="name-input" maxlength="16" autocomplete="nickname" placeholder="プレイヤー名" />
+
+        <label class="name-label" for="playerCountSelect">対戦人数</label>
+        <select id="playerCountSelect" class="name-input">
+          <option value="2">2人対戦</option>
+          <option value="3" selected>3人対戦</option>
+        </select>
 
         <button id="joinButton" class="plicy-button primary">参加</button>
 
@@ -35,7 +41,7 @@
     <section class="waiting-screen hidden" id="waitingView">
       <div class="message-window">
         <h2>対戦相手を待っています</h2>
-        <p id="waitingMessage">3人そろうと自動でスタートします。</p>
+        <p id="waitingMessage">人数がそろうと自動でスタートします。</p>
         <div class="waiting-meter">
           <div id="waitingBar"></div>
         </div>
