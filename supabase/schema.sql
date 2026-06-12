@@ -235,3 +235,7 @@ exception
   when duplicate_object then null;
 end;
 $$;
+
+-- PostgREST/Supabase APIのschema cacheを即時更新します。
+-- これが無いと、カラム追加後に「Could not find ... in the schema cache」が出ることがあります。
+notify pgrst, 'reload schema';
