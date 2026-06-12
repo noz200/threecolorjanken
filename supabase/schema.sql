@@ -121,8 +121,8 @@ begin
     'playing',
     1,
     (
-      select jsonb_agg(player_item ->> 'id')
-      from jsonb_array_elements(selected_players) as player_item
+      select jsonb_agg(player_item.value ->> 'id')
+      from jsonb_array_elements(selected_players) as player_item(value)
     ),
     0,
     selected_players,
@@ -132,8 +132,8 @@ begin
 
   delete from public.tcj_waiting
   where player_id in (
-    select player_item ->> 'id'
-    from jsonb_array_elements(selected_players) as player_item
+    select player_item.value ->> 'id'
+    from jsonb_array_elements(selected_players) as player_item(value)
   );
 
   return created_game_id;
