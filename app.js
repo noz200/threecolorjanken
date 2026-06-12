@@ -1,4 +1,6 @@
-const MAX_PLAYERS = 3;
+const DEFAULT_PLAYER_COUNT = 3;
+const MIN_PLAYER_COUNT = 2;
+const MAX_PLAYER_COUNT = 3;
 const MAX_ROUNDS = 9;
 const REVEAL_MS = 4500;
 const LOBBY_STALE_MS = 30000;
@@ -36,6 +38,7 @@ const els = {
   gameView: document.getElementById("gameView"),
   setupWarning: document.getElementById("setupWarning"),
   nameInput: document.getElementById("nameInput"),
+  playerCountSelect: document.getElementById("playerCountSelect"),
   joinButton: document.getElementById("joinButton"),
   leaveButton: document.getElementById("leaveButton"),
   waitingMessage: document.getElementById("waitingMessage"),
@@ -75,6 +78,7 @@ const isConfigured = Boolean(
 const playerId = getTabPlayerId();
 let db = null;
 let myName = localStorage.getItem("threecolorjanken.name") || "";
+let selectedPlayerCount = getSavedPlayerCount();
 let isWaiting = false;
 let currentGame = null;
 let lobbyChannel = null;
@@ -84,6 +88,7 @@ let maintenanceTimer = null;
 let toastTimer = null;
 
 els.nameInput.value = myName;
+els.playerCountSelect.value = String(selectedPlayerCount);
 
 if (!isConfigured) {
   els.setupWarning.classList.remove("hidden");
@@ -177,6 +182,25 @@ function getTabPlayerId() {
   return id;
 }
 
+function getSavedPlayerCount() {
+  return clampPlayerCount(localStorage.getItem("threecolorjanken.playerCount") ?? DEFAULT_PLAYER_COUNT);
+}
+
+function getSelectedPlayerCount() {
+  return clampPlayerCount(els.playerCountSelect.value);
+}
+
+function clampPlayerCount(value) {
+  const parsed = Number.parseInt(String(value), 10);
+  if (parsed === 2) return 2;
+  if (parsed === 3) return 3;
+  return DEFAULT_PLAYER_COUNT;
+}
+
+function gamePlayerCount(game) {
+  return clampPlayerCount(game?.player_count ?? game?.players?.length ?? selectedPlayerCount);
+}
+
 function show(view) {
   els.joinView.classList.toggle("hidden", view !== "join");
   els.waitingView.classList.toggle("hidden", view !== "waiting");
@@ -210,6 +234,11 @@ function sanitizeName(name) {
 els.joinButton.addEventListener("click", joinQueue);
 els.nameInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") joinQueue();
+});
+els.playerCountSelect.addEventListener("change", async () => {
+  selectedPlayerCount = getSelectedPlayerCount();
+  localStorage.setItem("threecolorjanken.playerCount", String(selectedPlayerCount));
+  if (!isWaiting) await loadLobby();
 });
 els.leaveButton.addEventListener("click", leaveQueue);
 els.backLobbyButton.addEventListener("click", returnLobby);
@@ -273,6 +302,9 @@ async function subscribeGames() {
 async function joinQueue() {
   if (!db) return;
 
+  selectedPlayerCount = getSelectedPlayerCount();
+  localStorage.setItem("threecolorjanken.playerCount", String(selectedPlayerCount));
+
   myName = sanitizeName(els.nameInput.value);
   localStorage.setItem("threecolorjanken.name", myName);
 
@@ -281,6 +313,7 @@ async function joinQueue() {
   const row = {
     player_id: playerId,
     name: myName,
+    desired_player_count: selectedPlayerCount,
     visible: true,
     joined_at: nowIso(),
     updated_at: nowIso(),
@@ -296,6 +329,7 @@ async function joinQueue() {
 
   isWaiting = true;
   currentGame = null;
+  els.playerCountSelect.disabled = true;
   show("waiting");
   await loadLobby();
   await tryMatch();
@@ -304,6 +338,7 @@ async function joinQueue() {
 async function leaveQueue(message) {
   if (!db) return;
   isWaiting = false;
+  els.playerCountSelect.disabled = false;
   await cleanupMyWaitingRow();
   await db.from("tcj_presence").delete().eq("player_id", playerId);
 
@@ -319,7 +354,10 @@ async function cleanupMyWaitingRow() {
 async function tryMatch() {
   if (!db || !isWaiting || !visibleNow()) return;
 
-  const { data, error } = await db.rpc("tcj_try_match", { p_player_id: playerId });
+  const { data, error } = await db.rpc("tcj_try_match", {
+    p_player_id: playerId,
+    p_player_count: selectedPlayerCount,
+  });
   if (error) {
     toast(`マッチング失敗: ${error.message}`);
     return;
@@ -364,6 +402,9 @@ async function loadGame(gameId) {
 
 function setGame(game) {
   currentGame = normalizeGame(game);
+  selectedPlayerCount = gamePlayerCount(currentGame);
+  els.playerCountSelect.value = String(selectedPlayerCount);
+  els.playerCountSelect.disabled = false;
   isWaiting = false;
   show("game");
   upsertPresence({ mode: "game", gameId: currentGame.id });
@@ -373,6 +414,7 @@ function setGame(game) {
 function normalizeGame(game) {
   return {
     ...game,
+    player_count: gamePlayerCount(game),
     order_ids: game.order_ids ?? [],
     players: game.players ?? [],
     submissions: game.submissions ?? [],
@@ -386,10 +428,13 @@ function isMyGame(game) {
 async function loadLobby() {
   if (!db) return;
 
+  const required = isWaiting ? selectedPlayerCount : getSelectedPlayerCount();
+
   const { data, error } = await db
     .from("tcj_waiting")
-    .select("player_id, name, joined_at, updated_at, visible")
+    .select("player_id, name, desired_player_count, joined_at, updated_at, visible")
     .eq("visible", true)
+    .eq("desired_player_count", required)
     .gte("updated_at", cutoffIso(LOBBY_STALE_MS))
     .order("joined_at", { ascending: true });
 
@@ -398,7 +443,7 @@ async function loadLobby() {
     return;
   }
 
-  renderLobby(data ?? []);
+  renderLobby(data ?? [], required);
 }
 
 async function heartbeat() {
@@ -522,7 +567,7 @@ async function playCard(cardId) {
     },
   ];
 
-  if (submissions.length >= MAX_PLAYERS) {
+  if (submissions.length >= gamePlayerCount(latest)) {
     await finishRound(latest, players, submissions);
     return;
   }
@@ -719,12 +764,12 @@ function currentPlayerId(game) {
   return game.order_ids?.[game.turn_index] ?? null;
 }
 
-function renderLobby(players) {
+function renderLobby(players, required = selectedPlayerCount) {
   const count = players.length;
-  const percentage = Math.min(100, Math.round((count / MAX_PLAYERS) * 100));
+  const percentage = Math.min(100, Math.round((count / required) * 100));
 
   els.waitingBar.style.width = `${percentage}%`;
-  els.waitingMessage.textContent = `${count} / ${MAX_PLAYERS} 人が待機中です。`;
+  els.waitingMessage.textContent = `${required}人対戦: ${count} / ${required} 人が待機中です。`;
   els.waitingPlayers.innerHTML = "";
 
   for (const player of players) {
@@ -742,7 +787,7 @@ function renderGame(game) {
   } else if (game.status === "aborted") {
     els.roundBadge.textContent = "ABORTED";
   } else {
-    els.roundBadge.textContent = `ROUND ${game.round} / ${MAX_ROUNDS}`;
+    els.roundBadge.textContent = `${gamePlayerCount(game)}P / ROUND ${game.round} / ${MAX_ROUNDS}`;
   }
 
   renderScores(game);
@@ -944,6 +989,7 @@ function getWinnerNames(rankings) {
 
 async function returnLobby() {
   currentGame = null;
+  els.playerCountSelect.disabled = false;
   await db.from("tcj_presence").delete().eq("player_id", playerId);
   show("join");
 }
