@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>三色じゃんけん 複数人対戦</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="game-shell">
+    <section class="title-screen" id="joinView">
+      <div class="logo-card">
+        <p class="mini-label">online board game</p>
+        <h1>三色じゃんけん</h1>
+        <p class="subtitle">3人そろったら自動で対戦開始</p>
+
+        <div class="setup-warning hidden" id="setupWarning">
+          Firebase設定がまだ入っていません。<br />
+          <code>firebase-config.js</code> を自分のFirebase設定に変更してください。
+        </div>
+
+        <label class="name-label" for="nameInput">なまえ</label>
+        <input id="nameInput" class="name-input" maxlength="16" autocomplete="nickname" placeholder="プレイヤー名" />
+
+        <button id="joinButton" class="plicy-button primary">参加</button>
+
+        <div class="rule-box">
+          <p>白は1点、青は2点、赤は3点。</p>
+          <p>前の人が出したカードは色だけ見える。</p>
+          <p>勝者は次のラウンドで1番手になる。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="waiting-screen hidden" id="waitingView">
+      <div class="message-window">
+        <h2>対戦相手を待っています</h2>
+        <p id="waitingMessage">3人そろうと自動でスタートします。</p>
+        <div class="waiting-meter">
+          <div id="waitingBar"></div>
+        </div>
+        <ul id="waitingPlayers" class="waiting-list"></ul>
+        <button id="leaveButton" class="plicy-button">待機をやめる</button>
+      </div>
+    </section>
+
+    <section class="battle-screen hidden" id="gameView">
+      <header class="hud">
+        <div class="round-badge" id="roundBadge">ROUND 1 / 9</div>
+        <div class="connection-badge" id="connectionBadge">ONLINE</div>
+      </header>
+
+      <div class="score-board" id="scoreBoard"></div>
+
+      <div class="main-board">
+        <aside class="order-panel">
+          <h2>順番</h2>
+          <ol id="orderList"></ol>
+        </aside>
+
+        <section class="center-panel">
+          <div class="message-window battle-message">
+            <p id="mainMessage">カードを選んでください。</p>
+          </div>
+
+          <div class="submitted-area" id="submittedArea"></div>
+
+          <div class="reveal-area hidden" id="revealArea">
+            <h2>公開</h2>
+            <div id="revealCards" class="reveal-cards"></div>
+          </div>
+        </section>
+      </div>
+
+      <section class="hand-panel">
+        <h2 id="handTitle">手札</h2>
+        <div id="handCards" class="hand-cards"></div>
+      </section>
+
+      <div class="after-game hidden" id="afterGame">
+        <button id="backLobbyButton" class="plicy-button primary">ロビーに戻る</button>
+        <button id="rematchButton" class="plicy-button">もう一回参加</button>
+      </div>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+  </main>
+
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
