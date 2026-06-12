@@ -57,12 +57,19 @@ const els = {
   toast: document.getElementById("toast"),
 };
 
+injectOpenHandsStyles();
+
 const config = window.TCJ_SUPABASE_CONFIG ?? {};
+const supabaseUrl = String(config.url ?? "").trim();
+const supabaseKey = String(config.anonKey ?? "").trim();
+
 const isConfigured = Boolean(
-  config.url &&
-  config.anonKey &&
-  !config.url.includes("YOUR_PROJECT_ID") &&
-  !config.anonKey.includes("YOUR_SUPABASE_ANON_KEY"),
+  supabaseUrl &&
+  supabaseKey &&
+  !supabaseUrl.includes("YOUR_PROJECT_ID") &&
+  !supabaseUrl.includes("YOUR_PROJECT_REF") &&
+  !supabaseKey.includes("YOUR_SUPABASE_ANON_KEY") &&
+  !supabaseKey.includes("YOUR_SUPABASE_PUBLISHABLE_KEY"),
 );
 
 const playerId = getTabPlayerId();
@@ -83,7 +90,7 @@ if (!isConfigured) {
   els.joinButton.disabled = true;
   toast("Supabase設定を入れるまで対戦できません。");
 } else {
-  db = window.supabase.createClient(config.url, config.anonKey);
+  db = window.supabase.createClient(supabaseUrl, supabaseKey);
   boot();
 }
 
@@ -102,6 +109,62 @@ function boot() {
   }, 3000);
 
   heartbeat();
+}
+
+function injectOpenHandsStyles() {
+  const style = document.createElement("style");
+  style.textContent = `
+    .open-hands {
+      display: block;
+    }
+
+    .player-hand-block {
+      width: 100%;
+      margin: 0 0 12px;
+      padding: 10px;
+      background: rgba(0, 0, 0, .24);
+      border: 2px solid rgba(255, 255, 255, .35);
+      box-shadow: 0 4px 0 rgba(0,0,0,.18);
+    }
+
+    .player-hand-block.mine {
+      border-color: rgba(255, 225, 91, .85);
+    }
+
+    .player-hand-block.current-turn {
+      outline: 4px solid #ffe15b;
+    }
+
+    .player-hand-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-weight: 800;
+    }
+
+    .player-hand-sub {
+      color: #e4e4e4;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .player-hand-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .player-hand-cards .reveal-card {
+      box-shadow: 0 5px 0 rgba(0,0,0,.25);
+    }
+
+    .card-button.playable {
+      outline: 4px solid #fff6a5;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 function getTabPlayerId() {
@@ -710,9 +773,9 @@ function renderGame(game) {
   const current = getPlayer(game, currentPlayerId(game));
 
   if (currentPlayerId(game) === playerId) {
-    els.mainMessage.textContent = "あなたの番です。カードを1枚選んでください。";
+    els.mainMessage.textContent = "あなたの番です。全員の残り手札を見て、カードを1枚選んでください。";
   } else {
-    els.mainMessage.textContent = `${current?.name ?? "相手"} の番です。色だけ見て待ちましょう。`;
+    els.mainMessage.textContent = `${current?.name ?? "相手"} の番です。全員の残り手札を見て待ちましょう。`;
   }
 }
 
@@ -794,30 +857,71 @@ function renderReveal(game) {
 }
 
 function renderHand(game) {
-  const isMyTurn = game.phase === "playing" && currentPlayerId(game) === playerId;
-  const me = getPlayer(game, playerId);
-  const hand = [...(me?.deck ?? [])].sort((a, b) => {
-    const colorOrder = { white: 0, blue: 1, red: 2 };
-    const handOrder = { rock: 0, scissors: 1, paper: 2 };
-    return colorOrder[a.color] - colorOrder[b.color] || handOrder[a.hand] - handOrder[b.hand];
-  });
+  const activePlayerId = currentPlayerId(game);
+  const isPlaying = game.status === "playing" && game.phase === "playing";
 
-  els.handTitle.textContent = isMyTurn ? "あなたの手札：選択してください" : "あなたの手札";
+  els.handTitle.textContent = "全員の残り手札";
+  els.handCards.classList.add("open-hands");
   els.handCards.innerHTML = "";
 
-  for (const card of hand) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `card-button color-${card.color}`;
-    button.disabled = !isMyTurn;
-    button.innerHTML = `
-      <span>${COLOR_LABELS[card.color]}</span>
-      <span class="card-hand">${HAND_LABELS[card.hand]}</span>
-      <span class="card-score">${COLOR_SCORE[card.color]}点</span>
-    `;
-    button.addEventListener("click", () => playCard(card.id));
-    els.handCards.appendChild(button);
+  for (const player of game.players) {
+    const isMe = player.id === playerId;
+    const isCurrentTurn = isPlaying && activePlayerId === player.id;
+    const isMyTurn = isMe && isCurrentTurn;
+
+    const block = document.createElement("section");
+    block.className = "player-hand-block";
+    if (isMe) block.classList.add("mine");
+    if (isCurrentTurn) block.classList.add("current-turn");
+
+    const hand = sortDeck(player.deck ?? []);
+    const header = document.createElement("div");
+    header.className = "player-hand-header";
+
+    const title = document.createElement("span");
+    title.textContent = `${player.name}${isMe ? "（あなた）" : ""}`;
+
+    const sub = document.createElement("span");
+    sub.className = "player-hand-sub";
+    sub.textContent = `${isCurrentTurn ? "今の番 / " : ""}残り ${hand.length} 枚`;
+
+    header.appendChild(title);
+    header.appendChild(sub);
+    block.appendChild(header);
+
+    const cards = document.createElement("div");
+    cards.className = "player-hand-cards";
+
+    for (const card of hand) {
+      const cardEl = isMyTurn ? document.createElement("button") : document.createElement("div");
+      cardEl.className = `${isMyTurn ? "card-button playable" : "reveal-card"} color-${card.color}`;
+
+      if (isMyTurn) {
+        cardEl.type = "button";
+        cardEl.addEventListener("click", () => playCard(card.id));
+      }
+
+      cardEl.innerHTML = `
+        <span>${COLOR_LABELS[card.color]}</span>
+        <span class="card-hand">${HAND_LABELS[card.hand]}</span>
+        <span class="card-score">${COLOR_SCORE[card.color]}点</span>
+      `;
+
+      cards.appendChild(cardEl);
+    }
+
+    block.appendChild(cards);
+    els.handCards.appendChild(block);
   }
+}
+
+function sortDeck(deck) {
+  const colorOrder = { white: 0, blue: 1, red: 2 };
+  const handOrder = { rock: 0, scissors: 1, paper: 2 };
+
+  return [...deck].sort((a, b) => {
+    return colorOrder[a.color] - colorOrder[b.color] || handOrder[a.hand] - handOrder[b.hand];
+  });
 }
 
 function getPlayer(game, id) {
